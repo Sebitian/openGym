@@ -53,7 +53,7 @@ const inFoldedGap = (t, gaps) => gaps.some(([a, b]) => t > a && t < b)
 
 // Pixels per trained day once a hole is folded. Wide enough that a week's points stay
 // separate, and wider than the card so a long history scrolls instead of shrinking.
-const PX_PER_DAY = 4
+const PX_PER_DAY = 8
 const AXIS_PAD = 46
 
 export function plotWidthFor(points, series) {
@@ -169,6 +169,14 @@ export default function LineChart({ points, h = 150, unit = '', color = 'var(--a
         const dd = new Date(tv)
         ticks.push({ t: tv, txt: dd.getDate() + ' ' + monthLabel(dd), anchor: i === 0 ? 'start' : i === 2 ? 'end' : 'middle' })
       }
+    }
+    // The first session can sit in a month whose later boundary falls inside a folded
+    // hole, so the loop above never names that year. Pin the opening month on the wide axis.
+    if (withYear && !single) {
+      const iso = pts[0].d
+      const startDate = iso ? new Date(iso + 'T12:00:00') : d0
+      const startLabel = monthLabel(startDate)
+      if (!ticks.some(tk => tk.txt === startLabel)) ticks.unshift({ t: t0, txt: startLabel, anchor: 'start' })
     }
     const slots = plotW > W ? Math.max(7, Math.floor((plotW - P.l - P.r) / 88)) : 7
     const every = Math.max(1, Math.ceil(ticks.length / slots))
