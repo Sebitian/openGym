@@ -35,6 +35,7 @@ import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import { overlaySupabaseTraining, supabaseTraining } from './supabase-training.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -2171,13 +2172,30 @@ const routes = {
   // `_unstamped` is the server's note of what it stamped for an older app's last push
   // (sync-stamps.js ownRecord), `_prior` what each field held before (notePrior): read back only
   // by the next PUT, never sent to a client.
+  'GET /api/training': async (_req, res) => {
+    try {
+      const training = await supabaseTraining();
+      if (!training) return json(res, 200, { workouts: [], customEx: [], bodyweight: [] });
+      json(res, 200, {
+        workouts: training.workouts,
+        customEx: training.customEx,
+        bodyweight: training.bodyweight,
+        plan: training.plan,
+        maxes: training.plan?.maxes || [],
+      });
+    } catch (err) {
+      console.error('supabase training', err);
+      json(res, 502, { error: 'supabase unavailable' });
+    }
+  },
   'GET /api/data': async (req, res) => {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     const state = readStateStrict(user.id);
     if (state === UNREADABLE) { console.error('state file unreadable for', user.id); return json(res, 503, { error: 'state unreadable' }); }
     notePull(user);
-    json(res, 200, { state: forClient(state), rev: state?._rev || 0 });
+    const view = await overlaySupabaseTraining(state);
+    json(res, 200, { state: forClient(view), rev: view?._rev || 0 });
   },
   // Just the revision: the client asks this every half minute while it is open and on every
   // return to the foreground, and fetches the document only when the number moved — a signed-in
@@ -2189,7 +2207,8 @@ const routes = {
     const user = readSession(req);
     if (!user) return json(res, 401, { error: 'not signed in' });
     const doc = readStateCached(user.id);
-    json(res, 200, { rev: doc?._rev || 0, ...(doc?._wid ? { wid: doc._wid } : {}) });
+    const view = await overlaySupabaseTraining(doc);
+    json(res, 200, { rev: view?._rev || 0, ...(view?._wid ? { wid: view._wid } : {}) });
   },
 
   'PUT /api/data': async (req, res) => {

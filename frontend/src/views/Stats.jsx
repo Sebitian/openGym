@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { EXIDX, matchExercise, betterWeight, isAssisted } from '../lib/exercises.js'
@@ -404,6 +404,30 @@ export function WeeklyPlanVolume({ S }) {
   </div>
 }
 
+// Exercise progress is wider than the card on purpose: the plot keeps a readable day scale
+// (including last year's sessions) and this strip scrolls to it. Same gesture as the activity
+// heatmap — wheel, trackpad, and touch — with the bar hidden.
+function ExerciseProgressScroll({ plotKey, children }) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [plotKey])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onWheel = event => {
+      if (el.scrollWidth <= el.clientWidth) return
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+      el.scrollLeft += event.deltaY
+      event.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [plotKey])
+  return <div className="chart ex-progress-scroll" ref={ref}>{children}</div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -624,6 +648,7 @@ export default function Stats() {
     note: exRir[i] == null ? undefined : hd + ' ' + fmtNum(toScale(kind, exRir[i]))
   })).filter(inExRange)
   const chartPts = onSets ? perSetChart.anchors : onMax ? maxChartPts : onEff ? effPts : onE1 ? e1ChartPts : topPts
+  const exPlotKey = `${curEx}|${exMetric}|${exRange}|${chartPts.length}|${chartPts[0]?.t ?? ''}|${chartPts[chartPts.length - 1]?.t ?? ''}`
   // A line needs two workouts. A range that holds fewer says so, instead of a lone dot or an empty box.
   const rangeTooShort = exRange !== 0 && chartPts.length < 2
   const exOpts = [{ value: 'top', label: t('Top set') }]
@@ -645,7 +670,7 @@ export default function Stats() {
     </div>
 
     <div className="card">
-      <h2>{t('Activity (last 12 months)')}</h2>
+      <h2>{t('Activity')}</h2>
       <Heatmap
         S={S}
         metric={S.heatmapMetric === 'vol' ? 'vol' : 'time'}
@@ -693,7 +718,7 @@ export default function Stats() {
         </div>}
       </div>
 
-      <div className="card">
+      <div className="card ex-progress">
         <h2>{t('Exercise progress')}</h2>
         {exHist.length ? <>
           <div className="sect-b" style={{ marginBottom: 10 }}>
@@ -708,17 +733,17 @@ export default function Stats() {
           </div>
           {exOpts.length > 1 && <Segmented className="seg-range" value={onMax ? 'max' : onEff ? 'effort' : onE1 ? 'e1rm' : onSets ? 'sets' : 'top'} onChange={setExMetric} options={exOpts} />}
           <Segmented className="seg-range" value={exRange} onChange={setExRange} options={rangeOptions()} />
-          <div className="chart">
+          <ExerciseProgressScroll plotKey={exPlotKey}>
             {rangeTooShort
               ? <div className="empty small">{t('Fewer than two workouts in this period. Pick a longer one.')}</div>
               : onSets
-              ? <LineChart points={perSetChart.anchors} series={perSetChart.series} h={150} unit={perSet.metric === 'reps' ? t('reps') : S.unit} />
+              ? <LineChart points={perSetChart.anchors} series={perSetChart.series} h={150} wide unit={perSet.metric === 'reps' ? t('reps') : S.unit} />
               : onMax
-              ? <LineChart points={maxChartPts} h={150} unit={t('reps')} color="var(--blue)" />
+              ? <LineChart points={maxChartPts} h={150} wide unit={t('reps')} color="var(--blue)" />
               : onEff
-              ? <LineChart points={effPts} h={150} unit={hd} color="var(--yellow)" invert={kind === 'rir'} />
-              : <LineChart points={chartPts} h={150} unit={exUnit} color="var(--blue)" />}
-          </div>
+              ? <LineChart points={effPts} h={150} wide unit={hd} color="var(--yellow)" invert={kind === 'rir'} />
+              : <LineChart points={chartPts} h={150} wide unit={exUnit} color="var(--blue)" />}
+          </ExerciseProgressScroll>
           {onSets && !rangeTooShort && <div className="row small" style={{ gap: 12, flexWrap: 'wrap', marginTop: 6 }}>
             {perSetChart.ns.map(n => <span key={n} className="row" style={{ gap: 5, alignItems: 'center' }}>
               <span aria-hidden="true" style={{ width: 8, height: 8, borderRadius: 4, background: SET_COLORS[n - 1] }} />{t('Set {0}', n)}

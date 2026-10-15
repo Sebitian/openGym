@@ -1602,6 +1602,15 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
 .chart{width:100%;overflow:hidden}
 .chart svg{display:block;width:100%;height:auto}
 .chart-i{position:relative;touch-action:pan-y}
+/* Exercise progress only: a wide plot scrolls inside the card. The bar stays hidden, matching
+   the activity heatmap. Both axes stay pannable so a vertical swipe still moves the page. */
+.card.ex-progress{min-width:0}
+.chart.ex-progress-scroll{
+  overflow-x:auto;overflow-y:hidden;min-width:0;max-width:100%;
+  -webkit-overflow-scrolling:touch;scrollbar-width:none;overscroll-behavior-x:contain;
+}
+.chart.ex-progress-scroll::-webkit-scrollbar{display:none;width:0;height:0}
+.ex-progress-scroll .chart-i{touch-action:pan-x pan-y}
 /* left/top are written by LineChart after measuring the label, so it can never be
    pushed under the `.chart` clip at either edge — hence no offset here. */
 .ctip{
@@ -1612,8 +1621,9 @@ body.no-tabbar #timer.working{box-shadow:inset 0 var(--hair) 0 var(--acc),0 -10p
 }
 
 /* --- activity heatmap --- */
-.hm-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px}
+.hm-wrap{overflow-x:auto;min-width:0;max-width:100%;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 .hm-wrap::-webkit-scrollbar{display:none}
+.hm-months,.hm-body{width:max-content}
 .hm-months{display:flex;margin-inline-start:28px;margin-bottom:5px}
 .hm-months span{flex:none;width:14px;font-size:11px;color:var(--label-3);white-space:nowrap;overflow:visible}
 .hm-body{display:flex}
@@ -1934,7 +1944,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
   #timer{left:50%;right:auto;margin-left:-260px;width:520px;bottom:112px}
   body.no-tabbar #timer{left:50%;right:auto;bottom:16px;border-radius:var(--r-xl);padding-bottom:10px;box-shadow:0 12px 40px -10px rgba(0,0,0,.5)}
   .exmedia img,.exmedia video{height:380px}
-  .hm-wrap{display:flex;flex-direction:column;align-items:center}
+  /* safe: a longer history stays start-aligned so the left weeks remain scrollable */
+  .hm-wrap{display:flex;flex-direction:column;align-items:safe center}
 }
 
 /* ------------------------------------------------------- gym check-in -- */
@@ -2130,7 +2141,7 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 [dir="rtl"] .sw.on:active .knob{transform:translateX(-16px)}
 /* Chronological grids keep their left-to-right order: heatmap weeks and calendar
    weekdays would otherwise mirror. */
-[dir="rtl"] .hm-wrap,[dir="rtl"] .cal-grid{direction:ltr}
+[dir="rtl"] .hm-wrap,[dir="rtl"] .cal-grid,[dir="rtl"] .ex-progress-scroll{direction:ltr}
 /* Tight tracking is tuned for Latin; Arabic is a connected script and gets none. */
 [dir="rtl"] *{letter-spacing:0}
 .exfix-link{display:inline-flex;align-items:center;gap:5px;margin:14px 0 4px;color:var(--label-3);text-decoration:none}

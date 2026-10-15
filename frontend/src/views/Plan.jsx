@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { DAYN, DAYS, weekOrder, weekStartOf, uid, exCount, routineCount, todayISO, fmtDate } from '../lib/format.js'
+import { DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, startOfWeek, isoOf, uid, exCount, routineCount, todayISO, fmtDate } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
 import {
   dayAssignSheet, starterPlanSheet, confirmSheet, menuSheet,
@@ -120,6 +120,31 @@ export function undoTakeOut({ id, at, label, snap, mark, marks }) {
 
 // The flash a row lands with when a swipe brought it (a duplicate, an undo): one per new value.
 let flashSeq = 0
+
+const programWeekOf = name => {
+  const match = String(name || '').match(/W(\d+)/)
+  return match ? Number(match[1]) : null
+}
+
+const ssttLabel = (name, week) => (week && /^SSTT D\d+$/.test(name) ? `${name} / W${week}` : name)
+
+/** The SSTT week number for the calendar week on screen: from a session already logged in it,
+ *  or one past the latest logged week. */
+function currentProgramWeek(S) {
+  const startIso = isoOf(startOfWeek(todayISO(), weekStartOf(S)))
+  const end = new Date(startIso + 'T12:00:00')
+  end.setDate(end.getDate() + 6)
+  const endIso = isoOf(end)
+  const logged = (S.workouts || [])
+    .filter(workout => workout.d >= startIso && workout.d <= endIso)
+    .map(workout => programWeekOf(workout.name))
+    .filter(week => week != null)
+  if (logged.length) return Math.max(...logged)
+  const latest = [...(S.workouts || [])].filter(workout => workout.d).sort((a, b) => (a.d < b.d ? 1 : -1))[0]
+  const week = latest && programWeekOf(latest.name)
+  if (week == null) return null
+  return latest.d < startIso ? week + 1 : week
+}
 
 export default function Plan() {
   const nav = useNavigate()
@@ -250,17 +275,24 @@ function Schedule({ S, update, nav, mode }) {
   })
 
   const ws = weekStartOf(S)
+  const programWeek = currentProgramWeek(S)
   const todayDow = new Date().getDay()
+  const weekStartDate = startOfWeek(todayISO(), ws)
+  const isoForDow = d => {
+    const date = new Date(weekStartDate)
+    date.setDate(weekStartDate.getDate() + weekDayOffset(d, ws))
+    return isoOf(date)
+  }
   const routineOf = id => S.routines.find(x => x.id === id)
   const dayRoutines = d => [].concat(S.week[d] || []).map(routineOf).filter(Boolean)
   // One weekday: what is on it at a glance, and a tap to change it (dayAssignSheet picks one
   // routine, several for a combined day, or a rest day).
   const dayRow = (d, rs = dayRoutines(d)) => {
     return <div key={d} className="item plan-day" data-day={d} aria-label={t(DAYN[d])} {...tappable(() => dayAssignSheet(d))}>
-      <span className={'plan-day-n' + (d === todayDow ? ' today' : '')} aria-hidden="true">{t(DAYS[d])}</span>
+      <span className={'plan-day-n' + (d === todayDow ? ' today' : '')} aria-hidden="true">{t(DAYS[d])} {fmtDate(isoForDow(d))}</span>
       <span className={'lrow-i' + (rs.length ? '' : ' rest')}><Icon name={rs.length ? glyphOf(rs[0].emoji) : 'moon'} /></span>
       <div className="grow">
-        <div className="tt">{rs.length ? deriveSessionName(rs.map(r => r.name)) : t('Rest day')}</div>
+        <div className="tt">{rs.length ? ssttLabel(deriveSessionName(rs.map(r => r.name)), programWeek) : t('Rest day')}</div>
         <div className="ss">{rs.length === 1 ? exCount(rs[0].ex.length) : rs.length ? routineCount(rs.length) : t('Tap to plan something')}</div>
       </div>
       <Icon name="chevronRight" className="chev" />
@@ -304,7 +336,7 @@ function Schedule({ S, update, nav, mode }) {
 
     {mode === 'week' ? <>
       <h4 className="sec">{t('This week')}</h4>
-      <div className="list plan-week">{weekOrder(ws).map(d => dayRow(d))}</div>
+      <div className="list plan-week">{[...weekOrder(ws)].reverse().map(d => dayRow(d))}</div>
       <p className="sect-f">{t('Want two routines on one day? Tap the day and pick both.')}</p>
     </> : <div className="rotation">
       <div className="row between plan-sec-h">

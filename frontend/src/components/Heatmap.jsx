@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { fmtVol, isoOf, todayISO, MONTHS, weekStartOf, weekDayOffset } from '../lib/format.js'
 import { workoutDay, workoutDuration, workoutVolume } from '../lib/history.js'
 import { t, tn } from '../lib/i18n.js'
@@ -21,7 +21,6 @@ const volumeOf = w => {
 export default function Heatmap({ S, onDay, metric: selectedMetric, onMetricChange }) {
   const wrapRef = useRef(null)
   const [localMetric, setLocalMetric] = useState(() => normalizeMetric(selectedMetric ?? S?.heatmapMetric))
-  useEffect(() => { if (wrapRef.current) wrapRef.current.scrollLeft = wrapRef.current.scrollWidth }, [])
 
   const metric = normalizeMetric(selectedMetric ?? localMetric)
   const metricValue = metric === 'vol' ? 'vol' : 'min'
@@ -48,7 +47,15 @@ export default function Heatmap({ S, onDay, metric: selectedMetric, onMetricChan
   const today = new Date(); today.setHours(12, 0, 0, 0)
   const ws = weekStartOf(S)
   const end = new Date(today); end.setDate(today.getDate() - weekDayOffset(today.getDay(), ws))
-  const start = new Date(end); start.setDate(end.getDate() - 52 * 7)
+  // At least a year, and further back when history is older, so an earlier cycle stays reachable.
+  const earliestDay = Object.keys(agg).sort()[0]
+  let weeksBack = 52
+  if (earliestDay) {
+    const earliest = new Date(earliestDay + 'T12:00:00')
+    earliest.setDate(earliest.getDate() - weekDayOffset(earliest.getDay(), ws))
+    if (earliest < end) weeksBack = Math.max(52, Math.round((end - earliest) / (7 * 86400000)))
+  }
+  const start = new Date(end); start.setDate(end.getDate() - weeksBack * 7)
 
   const dayLabels = Array(7).fill(null)
   dayLabels[weekDayOffset(1, ws)] = 'Mon'
@@ -57,10 +64,10 @@ export default function Heatmap({ S, onDay, metric: selectedMetric, onMetricChan
 
   const months = [], cols = []
   let lastMonth = -1
-  for (let wk = 0; wk <= 52; wk++) {
+  for (let wk = 0; wk <= weeksBack; wk++) {
     const colStart = new Date(start); colStart.setDate(start.getDate() + wk * 7)
     const mo = colStart.getMonth()
-    const showM = mo !== lastMonth && colStart.getDate() <= 7 && wk < 51
+    const showM = mo !== lastMonth && colStart.getDate() <= 7 && wk < weeksBack
     months.push(<span key={wk}>{showM ? t(MONTHS[mo]) : ''}</span>)
     if (colStart.getDate() <= 7) lastMonth = mo
     const cells = []
@@ -78,6 +85,23 @@ export default function Heatmap({ S, onDay, metric: selectedMetric, onMetricChan
     }
     cols.push(<div key={wk} className="hm-col">{cells}</div>)
   }
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current
+    if (el) el.scrollLeft = el.scrollWidth
+  }, [weeksBack])
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const onWheel = event => {
+      if (el.scrollWidth <= el.clientWidth) return
+      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return
+      el.scrollLeft += event.deltaY
+      event.preventDefault()
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [weeksBack])
 
   return <>
     <Segmented value={metric} onChange={changeMetric}

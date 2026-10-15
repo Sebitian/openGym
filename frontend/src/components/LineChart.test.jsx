@@ -103,6 +103,74 @@ describe('LineChart hover state', () => {
   })
 })
 
+function polylineXs() {
+  return container.querySelector('polyline').getAttribute('points').trim().split(/\s+/).map(p => Number(p.split(',')[0]))
+}
+
+function xLabels() {
+  return [...container.querySelectorAll('text')]
+    .filter(n => Number(n.getAttribute('y')) > 130)
+    .map(n => n.textContent)
+}
+
+describe('LineChart empty stretches', () => {
+  it('keeps a skipped week or two on the real clock', () => {
+    const start = new Date(2026, 7, 31, 12).getTime()
+    const day = 86400000
+    act(() => root.render(<LineChart axes={false} points={[
+      { t: start, y: 1 },
+      { t: start + 7 * day, y: 2 },
+      { t: start + 21 * day, y: 3 },
+      { t: start + 28 * day, y: 4 },
+    ]} />))
+    const xs = polylineXs()
+    const gaps = [xs[1] - xs[0], xs[2] - xs[1], xs[3] - xs[2]]
+    expect(gaps[1] / gaps[0]).toBeGreaterThan(1.8)
+    expect(gaps[1] / gaps[0]).toBeLessThan(2.2)
+  })
+
+  it('folds a multi-month hole so empty months are not the axis', () => {
+    const weeks = []
+    const add = (y, m, d, v) => weeks.push(point(y, m, d, v))
+    for (let i = 0; i < 8; i++) add(2025, 10, 6 + i * 7, 70 + i)
+    add(2026, 8, 3, 80)
+    add(2026, 8, 10, 81)
+    add(2026, 8, 17, 82)
+    add(2026, 8, 24, 83)
+    add(2026, 8, 31, 84)
+    add(2026, 9, 21, 85)
+    add(2026, 9, 28, 86)
+    add(2026, 10, 5, 87)
+    act(() => root.render(<LineChart points={weeks} axes unit="kg" />))
+
+    const labels = xLabels()
+    expect(labels).not.toContain('Feb')
+    expect(labels).not.toContain('Apr')
+    expect(labels).not.toContain('Jun')
+    expect(labels.some(l => l === 'Sep' || l === 'Oct' || l === 'Nov')).toBe(true)
+
+    const xs = polylineXs()
+    const before = xs[7]
+    const after = xs[8]
+    const span = xs[xs.length - 1] - xs[0]
+    expect((after - before) / span).toBeLessThan(0.15)
+    expect(after).toBeGreaterThan(before)
+  })
+
+  it('leaves a range that never includes the hole on a linear axis', () => {
+    act(() => root.render(<LineChart axes={false} points={[
+      point(2026, 8, 3, 80),
+      point(2026, 8, 10, 81),
+      point(2026, 8, 17, 82),
+      point(2026, 8, 24, 83),
+    ]} />))
+    const xs = polylineXs()
+    const gaps = [xs[1] - xs[0], xs[2] - xs[1], xs[3] - xs[2]]
+    expect(gaps[1] / gaps[0]).toBeGreaterThan(0.9)
+    expect(gaps[1] / gaps[0]).toBeLessThan(1.1)
+  })
+})
+
 describe('LineChart y axis', () => {
   it('labels the zero line 0, never -0, when the range dips just below zero', () => {
     act(() => root.render(<LineChart points={[point(2026, 1, 1, 70), point(2026, 1, 8, 9999)]} axes unit="kg" />))
