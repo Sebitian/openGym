@@ -1,0 +1,18 @@
+# The filesystem API is a long-lived Node process. Production serves the
+# Vite app and the read-only training routes only.
+api/**
+!api/package.json
+!api/training.js
+!api/config.js
+!api/me.js
+!api/supabase-training.js
+
+data/
+.env
+.env.*
+node_modules
+frontend/node_modules
+mcp
+frontend/android
+frontend/ios
+catalogue/media

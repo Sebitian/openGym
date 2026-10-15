@@ -7,8 +7,31 @@ import crypto from 'node:crypto';
    catalogue keeps that variation separate. */
 const CATALOG = new Map([
   ['barbell full squat', '0043'],
+  ['barbell full squats', '0043'],
   ['back squat', '0043'],
+  ['back squats', '0043'],
   ['squat', '0043'],
+  ['squats', '0043'],
+  ['barbell squat', '0043'],
+  ['barbell squats', '0043'],
+  ['bb squat', '0043'],
+  ['bb squats', '0043'],
+  ['barbell back squat', '0043'],
+  ['barbell back squats', '0043'],
+  ['bb back squat', '0043'],
+  ['bb back squats', '0043'],
+  ['full squat', '0043'],
+  ['full squats', '0043'],
+  /* High bar was a regular back squat, so it is barbell full squat, not 1436. */
+  ['barbell high bar squat', '0043'],
+  ['barbell high-bar squat', '0043'],
+  ['barbell highbar squat', '0043'],
+  ['high bar squat', '0043'],
+  ['high bar squats', '0043'],
+  ['high-bar squat', '0043'],
+  ['high-bar squats', '0043'],
+  ['highbar squat', '0043'],
+  ['highbar squats', '0043'],
   ['barbell bench press', '0025'],
   ['bench press', '0025'],
   ['bench', '0025'],
@@ -21,8 +44,6 @@ const CATALOG = new Map([
   ['romanian deadlifts', '0085'],
   ['rdl', '0085'],
   ['bb rdl', '0085'],
-  ['barbell high bar squat', '1436'],
-  ['high bar squat', '1436'],
   ['barbell close-grip bench press', '0030'],
   ['close grip bench press', '0030'],
   ['close grip bench', '0030'],
@@ -218,7 +239,6 @@ const MAXES = {
   'romanian deadlift': 335,
   'close grip bench': 215,
   'close grip bench press': 215,
-  'high bar squat': 275,
 };
 
 let cache = { at: 0, body: null };
@@ -401,8 +421,9 @@ function buildPlan(rows, customs) {
     for (const [id, sets] of grouped) {
       const prescribed = prescribe(sets);
       if (!prescribed) continue;
-      const max = MAXES[nameOf.get(id)];
-      if (max) maxes.set(id, max);
+      const max = MAXES[normalizeName(nameOf.get(id))];
+      const kept = maxes.get(id);
+      if (max && (kept == null || max > kept)) maxes.set(id, max);
       ex.push({ id, mode: 'reps', ...prescribed });
     }
     if (!ex.length) continue;
