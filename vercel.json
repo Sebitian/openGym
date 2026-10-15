@@ -1,6 +1,5 @@
 {
   "framework": null,
   "installCommand": "npm install --prefix frontend",
-  "buildCommand": "npm run build --prefix frontend",
-  "outputDirectory": "frontend/dist"
+  "buildCommand": "node scripts/vercel-build.mjs"
 }
